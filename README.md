@@ -42,6 +42,14 @@ npm start           # собранный бэкенд
 npm run smoke       # проверка по HTTP; API должен работать
 ```
 
+Фронтенд запускается во втором терминале:
+
+```sh
+npm run dev:web                 # фронтенд на http://localhost:5173
+npm run build:web               # сборка фронтенда
+npm run test -w @canvas/web     # правила графа, очередь сохранений, HTTP-слой
+```
+
 ## Настройки
 
 Адрес по умолчанию — `127.0.0.1:4001`. При необходимости скопируйте `.env.example` в `.env` и измените `PORT`. Для проверки другого адреса: `BASE_URL=http://localhost:4101 npm run smoke`.
