@@ -16,14 +16,14 @@ import { client } from './api/client';
 import { canConnect, indexOf, KIND_LIST, KINDS, type GraphIndex } from './model';
 import { queryClient, spacesQuery } from './api/queries';
 import { useSession } from './store';
-import { GraphStoreProvider, useGraph } from './providers/graph-store';
+import { GraphStoreProvider, useGraph, useNodeLimit } from './providers/graph-store';
 import { nodeTypes } from './nodes';
 import { Tracker } from './components/tracker';
 import { SyncProvider, useSaveState, useSync } from './providers/sync';
 import { ArrowLeftIcon, ArrowUpRightIcon, PlusIcon } from '@phosphor-icons/react';
 import { ButtonGroup, ButtonGroupText } from '@/components/ui/button-group';
 import { SAVE_RULES } from './save-status';
-import { Button, ErrorNote, Field, Input, Status, type Tone } from './ui';
+import { Button, ErrorNote, Field, Input, Status, TONE_CLASS } from './ui';
 import { Separator } from '@base-ui/react';
 
 const PROXIMITY = 800;
@@ -31,14 +31,6 @@ const PROXIMITY = 800;
 const NODE_ORIGIN: NodeOrigin = [0.5, 0.5];
 
 const CASCADE = 28;
-
-const TONE_ICON: Record<Tone, string> = {
-  idle: 'text-muted-foreground',
-  busy: 'text-primary',
-  ok: 'text-emerald-600',
-  warn: 'text-amber-600',
-  error: 'text-destructive',
-};
 
 function useProximity(index: GraphIndex) {
   const store = useStoreApi();
@@ -138,7 +130,7 @@ function Canvas() {
 
 function Toolbar() {
   const addNode = useGraph((state) => state.addNode);
-  const count = useGraph((state) => state.nodes.length);
+  const { count, full } = useNodeLimit();
   const instance = useReactFlow();
   const store = useStoreApi();
   const { state } = useSaveState();
@@ -162,6 +154,7 @@ function Toolbar() {
             key={kind}
             variant="outline"
             className="text-xs "
+            disabled={full}
             aria-label={`Добавить ${KINDS[kind].title}`}
             onClick={() => add(kind)}
           >
@@ -170,7 +163,7 @@ function Toolbar() {
         ))}
       </ButtonGroup>
       <ButtonGroupText data-save-status={state.status} title={state.text}>
-        <StateIcon aria-hidden className={TONE_ICON[state.tone]} />
+        <StateIcon aria-hidden className={TONE_CLASS[state.tone]} />
         <span className="grid">
           {SAVE_RULES.map((rule) => (
             <span
@@ -196,6 +189,7 @@ function Toolbar() {
 function Notices({ title, onBack }: { title: string; onBack: () => void }) {
   const { reread, retrySave } = useSync();
   const { state, error, loadError } = useSaveState();
+  const { max, full } = useNodeLimit();
   return (
     <div className="pointer-events-none absolute inset-x-0 top-4 flex flex-col items-center gap-2 px-4">
       <h1 className="pointer-events-auto absolute top-1 left-4">
@@ -225,6 +219,13 @@ function Notices({ title, onBack }: { title: string; onBack: () => void }) {
           <Button size="xs" variant="outline" onClick={() => void reread()}>
             Перечитать граф
           </Button>
+        </div>
+      ) : full ? (
+        <div
+          className="pointer-events-auto flex max-w-xl items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-700 shadow-sm"
+          role="status"
+        >
+          <span>Достигнут лимит графа: {max} нод. Удалите ноду, чтобы добавить новую.</span>
         </div>
       ) : (
         <div className="pointer-events-auto max-w-xl">

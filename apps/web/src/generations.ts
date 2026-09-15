@@ -1,14 +1,14 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { endpoints, type GenerationData } from './api/endpoints';
 import { client } from './api/client';
-import { generationsQuery, keys, queryClient } from './api/queries';
+import { generationsQuery, keys, queryClient, retryPolicy } from './api/queries';
 import { collectRuns, replaceById, type Runs, type Scenario } from './model';
 import { useSync } from './providers/sync';
 export const useRuns = (): Runs => {
   const { spaceId } = useSync();
   const { data } = useQuery(generationsQuery(spaceId));
-  return useMemo(() => collectRuns(data), [data]);
+  return collectRuns(data);
 };
 
 export function useStart(nodeId: string) {
@@ -26,8 +26,7 @@ export function useStart(nodeId: string) {
           idempotencyKey,
         }),
       ),
-    retry: (count, error) => error.retriable && count < 2,
-    retryDelay: (count) => 400 * 2 ** count,
+    ...retryPolicy,
     onSuccess: (data) => {
       key.current = null;
       queryClient.setQueryData(keys.generation(spaceId, data.id), data);

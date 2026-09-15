@@ -11,7 +11,7 @@ export { Select } from '@/components/ui/select';
 
 export type Tone = 'idle' | 'busy' | 'ok' | 'warn' | 'error';
 
-const TONE_CLASS: Record<Tone, string> = {
+export const TONE_CLASS: Record<Tone, string> = {
   idle: 'text-muted-foreground',
   busy: 'text-primary',
   ok: 'text-emerald-600',

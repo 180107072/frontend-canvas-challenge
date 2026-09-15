@@ -9,20 +9,34 @@ import {
   reconcile,
   replaceById,
   toPayload,
+  withDefaults,
 } from '../src/model.ts';
-import type { FlowNode } from '../src/model.ts';
+import type { Edge } from '@xyflow/react';
+import type { GenerationData, GraphData } from '@canvas/contracts';
+import type { FlowNode, Scenario } from '../src/model.ts';
 
-const node = (id: string, type: string, text = '') =>
-  ({
-    id,
-    type,
-    position: { x: 0, y: 0 },
-    data: type === 'prompt' ? { text } : { label: type },
-  }) as unknown as FlowNode;
+const at = { x: 0, y: 0 };
+const prompt = (id: string, text = ''): FlowNode => ({
+  id,
+  type: 'prompt',
+  position: at,
+  data: { text },
+});
+const generator = (id: string, scenario: Scenario = 'success'): FlowNode => ({
+  id,
+  type: 'generator',
+  position: at,
+  data: { label: 'Генератор', scenario },
+});
+const result = (id: string): FlowNode => ({
+  id,
+  type: 'result',
+  position: at,
+  data: { label: 'Результат' },
+});
+const edge = (id: string, source: string, target: string): Edge => ({ id, source, target });
 
-const edge = (id: string, source: string, target: string) => ({ id, source, target });
-
-const nodes = [node('p', 'prompt', 'горы'), node('g', 'generator'), node('r', 'result')];
+const nodes = [prompt('p', 'горы'), generator('g'), result('r')];
 
 test('connection rule allows only prompt -> generator -> result', () => {
   const index = indexOf(nodes, []);
@@ -36,19 +50,19 @@ test('connection rule allows only prompt -> generator -> result', () => {
 test('an input takes one edge and a generator one result', () => {
   const index = indexOf(nodes, [edge('e1', 'p', 'g'), edge('e2', 'g', 'r')]);
   assert.equal(canConnect(index, 'p', 'g'), false);
-  const extra = [...nodes, node('r2', 'result')];
+  const extra = [...nodes, result('r2')];
   assert.equal(canConnect(indexOf(extra, [edge('e2', 'g', 'r')]), 'g', 'r2'), false);
 });
 
 test('a prompt may feed several generators', () => {
-  const many = [...nodes, node('g2', 'generator')];
+  const many = [...nodes, generator('g2')];
   assert.equal(canConnect(indexOf(many, [edge('e1', 'p', 'g')]), 'p', 'g2'), true);
 });
 
 test('chain reports the first missing piece', () => {
   assert.equal(chainOf(indexOf(nodes, []), 'g').problem, 'no-prompt');
   assert.equal(chainOf(indexOf(nodes, [edge('e1', 'p', 'g')]), 'g').problem, 'no-result');
-  const blank = [node('p', 'prompt', '  '), node('g', 'generator'), node('r', 'result')];
+  const blank = [prompt('p', '  '), generator('g'), result('r')];
   const wired = [edge('e1', 'p', 'g'), edge('e2', 'g', 'r')];
   assert.equal(chainOf(indexOf(blank, wired), 'g').problem, 'empty-prompt');
   const ready = chainOf(indexOf(nodes, wired), 'g');
@@ -62,31 +76,27 @@ test('index is reused while both arrays keep their identity', () => {
 });
 
 test('payload carries only schema fields', () => {
-  const dirty = [{ ...nodes[0], selected: true, dragging: true, measured: { width: 1 } }];
-  const payload = toPayload(dirty as FlowNode[], [edge('e1', 'p', 'g')], { x: 1, y: 2, zoom: 1 });
+  const dirty: FlowNode[] = [
+    { ...nodes[0], selected: true, dragging: true, measured: { width: 1 } },
+  ];
+  const payload = toPayload(dirty, [edge('e1', 'p', 'g')], { x: 1, y: 2, zoom: 1 });
   assert.deepEqual(Object.keys(payload.nodes[0]), ['id', 'type', 'position', 'data']);
   assert.deepEqual(Object.keys(payload.edges[0]), ['id', 'source', 'target']);
 });
 
 test('client-only data keys never reach the server payload', () => {
-  const generator = {
-    id: 'g',
-    type: 'generator',
-    position: { x: 0, y: 0 },
-    data: { label: 'Генератор', scenario: 'failure' },
-  } as unknown as FlowNode;
-  const payload = toPayload([generator], [], { x: 0, y: 0, zoom: 1 });
+  const payload = toPayload([generator('g', 'failure')], [], { x: 0, y: 0, zoom: 1 });
   assert.deepEqual(payload.nodes[0].data, { label: 'Генератор' });
 });
 
 test('adopting server data fills client-only keys from the kind defaults', () => {
-  const graph = {
+  const graph: GraphData = {
     nodes: [{ id: 'g', type: 'generator', position: { x: 0, y: 0 }, data: { label: 'Генератор' } }],
     edges: [],
     viewport: { x: 0, y: 0, zoom: 1 },
-  } as never;
-  const [node] = fromPayload(graph).nodes;
-  assert.deepEqual(node.data, { label: 'Генератор', scenario: 'success' });
+  };
+  const [adopted] = fromPayload(graph).nodes;
+  assert.deepEqual(adopted.data, { label: 'Генератор', scenario: 'success' });
 });
 
 test('reconcile decides what to do with a draft when the server graph arrives', () => {
@@ -99,8 +109,25 @@ test('reconcile decides what to do with a draft when the server graph arrives', 
   assert.equal(reconcile({ dirty: true, etag: null }, server), 'conflict');
 });
 
-const run = (id: string, nodeId: string, resultNodeId: string, status: string) =>
-  ({ id, nodeId, resultNodeId, status }) as never;
+const run = (
+  id: string,
+  nodeId: string,
+  resultNodeId: string,
+  status: GenerationData['status'],
+): GenerationData => ({
+  id,
+  spaceId: 'space',
+  nodeId,
+  resultNodeId,
+  prompt: 'горы',
+  graphETag: '"abc"',
+  scenario: 'success',
+  status,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  imageUrl: status === 'succeeded' ? '/assets/demo.svg' : null,
+  failureCode: status === 'failed' ? 'SIMULATED_FAILURE' : null,
+  links: {},
+});
 
 test('newest-first list collapses to latest attempt and newest result', () => {
   const runs = collectRuns([
@@ -113,6 +140,22 @@ test('newest-first list collapses to latest attempt and newest result', () => {
   assert.equal(runs.byNode.get('g2')?.id, '0');
   assert.equal(runs.byResult.get('r')?.id, '2');
   assert.deepEqual(runs.active, ['3']);
+});
+
+test('runs index is built once per list and shared by every caller', () => {
+  const list = [run('1', 'g', 'r', 'processing')];
+  assert.equal(collectRuns(list), collectRuns(list));
+  assert.notEqual(collectRuns(list), collectRuns([...list]));
+});
+
+test('a node stored without a field gets the kind default, not undefined', () => {
+  const stored = [
+    { id: 'g', type: 'generator' as const, position: { x: 0, y: 0 }, data: { label: 'Ген' } },
+  ];
+  const [filled] = withDefaults(stored);
+  assert.ok(filled.type === 'generator');
+  assert.equal(filled.data.scenario, 'success');
+  assert.equal(filled.data.label, 'Ген');
 });
 
 test('replaceById swaps in place and prepends unknown ids', () => {

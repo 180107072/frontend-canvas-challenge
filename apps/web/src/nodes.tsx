@@ -84,7 +84,7 @@ function GeneratorNode({ id, data }: NodeProps<Extract<FlowNode, { type: 'genera
   const { byNode } = useRuns();
   const { start, pending, error } = useStart(id);
   const setValue = useGraph((state) => state.setValue);
-  const scenario = data.scenario ?? 'success';
+  const scenario = data.scenario;
 
   const chain = chainOf(index, id);
   const run = byNode.get(id);

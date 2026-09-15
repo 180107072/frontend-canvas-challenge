@@ -8,14 +8,14 @@ declare module '@tanstack/react-query' {
     defaultError: RequestError;
   }
 }
+export const retryPolicy = {
+  retry: (count: number, error: RequestError) => error.retriable && count < 2,
+  retryDelay: (count: number) => 400 * 2 ** count,
+};
+
 export const queryClient = new QueryClient({
   defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      refetchOnWindowFocus: false,
-      retry: (count, error) => error.retriable && count < 2,
-      retryDelay: (count) => 400 * 2 ** count,
-    },
+    queries: { staleTime: 30_000, refetchOnWindowFocus: false, ...retryPolicy },
     mutations: { retry: false },
   },
 });

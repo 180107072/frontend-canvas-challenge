@@ -6,7 +6,7 @@ export type Scenario = 'success' | 'failure';
 
 export interface DataByKind {
   prompt: { text: string };
-  generator: { label: string; scenario?: Scenario };
+  generator: { label: string; scenario: Scenario };
   result: { label: string };
 }
 
@@ -141,11 +141,18 @@ export const toPayload = (
   }
   return { nodes: payloadNodes, edges: payloadEdges, viewport };
 };
-export const fromPayload = (graph: GraphData) => ({
-  nodes: graph.nodes.map((node) => ({
+export const withDefaults = <
+  T extends { id: string; type: NodeKind; position: { x: number; y: number }; data: object },
+>(
+  nodes: readonly T[] | undefined,
+): FlowNode[] =>
+  (nodes ?? []).map((node) => ({
     ...node,
     data: { ...KINDS[node.type].create(), ...node.data },
-  })) as FlowNode[],
+  })) as FlowNode[];
+
+export const fromPayload = (graph: GraphData) => ({
+  nodes: withDefaults(graph.nodes),
   edges: graph.edges as Edge[],
   viewport: graph.viewport,
 });
@@ -166,8 +173,13 @@ export interface Runs {
 }
 
 export const NO_RUNS: Runs = { byNode: new Map(), byResult: new Map(), active: [] };
+
+const runsCache = new WeakMap<readonly GenerationData[], Runs>();
 export const collectRuns = (list: readonly GenerationData[] | undefined): Runs => {
   if (!list) return NO_RUNS;
+  const hit = runsCache.get(list);
+  if (hit) return hit;
+
   const byNode = new Map<string, GenerationData>();
   const byResult = new Map<string, GenerationData>();
   const active: string[] = [];
@@ -177,7 +189,10 @@ export const collectRuns = (list: readonly GenerationData[] | undefined): Runs =
       byResult.set(run.resultNodeId, run);
     if (run.status === 'processing') active.push(run.id);
   }
-  return { byNode, byResult, active };
+
+  const runs = { byNode, byResult, active };
+  runsCache.set(list, runs);
+  return runs;
 };
 export const replaceById = (list: readonly GenerationData[], next: GenerationData) => {
   const at = list.findIndex((item) => item.id === next.id);

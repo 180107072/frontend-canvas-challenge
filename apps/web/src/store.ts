@@ -20,6 +20,7 @@ import {
   fromPayload,
   indexOf,
   KINDS,
+  withDefaults,
   type FlowNode,
   type NodeKind,
   type NodePatch,
@@ -141,6 +142,10 @@ export const createGraphStore = (spaceId: string) =>
       {
         name: `canvas:draft:${spaceId}`,
         storage: throttledStorage(),
+        merge: (persisted, current) => {
+          const draft = persisted as Partial<GraphState> | undefined;
+          return { ...current, ...draft, nodes: withDefaults(draft?.nodes) };
+        },
         partialize: (s) => ({
           nodes: s.nodes,
           edges: s.edges,
